@@ -1,0 +1,42 @@
+
+
+services:
+  cat_alert_instagram:
+    build: .
+    container_name: cat_alert_instagram
+    environment:
+      - OMP_NUM_THREADS=1
+      - FORCE_CPU=1
+      - YOLO_CONFIG_DIR=/app/config
+      - RTSP_URL1=rtsp://USER:PASSWORD.@192.168.178.xx:554?tcp
+      - RTSP_URL2=rtsp://USER:PASSWORD.@192.168.178.xx:554?tcp
+      - INSTAGRAM_USER=USER
+      - INSTAGRAM_PASS=PASSWORD
+    volumes:
+      - ./captures:/app/captures
+      - ./config:/app/config
+      - ./session.json:/app/session.json          # Login-Speicherung
+      - ./posted:/app/posted                      # Verschobene, bereits gepostete Bilder
+    restart: unless-stopped
+
+  cat_poster:
+    image: python:3.11-slim
+    container_name: cat_poster
+    working_dir: /app
+    volumes:
+      - ./captures:/app/captures
+      - ./posted:/app/posted
+      - ./session.json:/app/session.json
+      - ./post_scheduler.py:/app/post_scheduler.py
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y cron python3-pip &&
+      pip install instagrapi &&
+      echo '0 6,18 * * * root python3 /app/post_scheduler.py >> /var/log/poster.log 2>&1' > /etc/cron.d/poster &&
+      chmod 0644 /etc/cron.d/poster &&
+      crontab /etc/cron.d/poster &&
+      touch /var/log/poster.log &&
+      cron -f
+      "
+    restart: unless-stopped
